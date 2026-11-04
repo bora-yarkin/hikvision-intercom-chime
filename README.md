@@ -15,7 +15,7 @@ It replaces three integrations (`hikconnect`, `hikconnect_intercom`,
 `hikvision_intercom_chime`), the *Hikvision Doorbell* app and the MQTT broker that
 only they needed. Windows, iVMS, SADP and the Hik-Connect phone app are not required.
 
-**HACS custom repository** (not submitted to the default catalogue).
+**Marketplace custom repository** (not submitted to the default catalogue; HACS is part of Home Assistant as the Marketplace since 2026.11).
 [Türkçe kurulum rehberi](docs/KURULUM_TR.md).
 
 ## Requirements
@@ -28,8 +28,8 @@ only they needed. Windows, iVMS, SADP and the Hik-Connect phone app are not requ
 
 ## Install
 
-1. HACS -> three-dot menu -> Custom repositories -> add
-   `https://github.com/bora-yarkin/hikvision-intercom-chime`, category **Integration**
+1. Settings -> Marketplace -> Add from link
+   `https://github.com/bora-yarkin/hikvision-intercom-chime`
    -> download **Hikvision Intercom** -> restart Home Assistant.
 2. Settings -> Apps -> App store -> three-dot menu -> Repositories -> add the same URL ->
    install **Hikvision SDK Bridge** (the image is built on your device; the first build
