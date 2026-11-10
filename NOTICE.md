@@ -20,3 +20,5 @@ work, and under which terms.
   subject to Hikvision's SDK terms.
 - Hikvision, Hik-Connect and EZVIZ are trademarks of their owners. This is an unofficial
   community project.
+
+This repository is a fork of [berkkayhan34-sys/hikvision-intercom-chime](https://github.com/berkkayhan34-sys/hikvision-intercom-chime), which it was made from and which remains the original work of its author.

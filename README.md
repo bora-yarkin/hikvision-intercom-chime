@@ -29,7 +29,7 @@ only they needed. Windows, iVMS, SADP and the Hik-Connect phone app are not requ
 ## Install
 
 1. HACS -> three-dot menu -> Custom repositories -> add
-   `https://github.com/berkkayhan34-sys/hikvision-intercom-chime`, category **Integration**
+   `https://github.com/bora-yarkin/hikvision-intercom-chime`, category **Integration**
    -> download **Hikvision Intercom** -> restart Home Assistant.
 2. Settings -> Apps -> App store -> three-dot menu -> Repositories -> add the same URL ->
    install **Hikvision SDK Bridge** (the image is built on your device; the first build

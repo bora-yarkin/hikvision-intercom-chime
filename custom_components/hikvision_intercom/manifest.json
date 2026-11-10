@@ -7,7 +7,7 @@
     "stream"
   ],
   "codeowners": [
-    "@berkkayhan34-sys"
+    "@bora-yarkin"
   ],
   "config_flow": true,
   "dependencies": [
@@ -17,10 +17,10 @@
     "http",
     "stt"
   ],
-  "documentation": "https://github.com/berkkayhan34-sys/hikvision-intercom-chime",
+  "documentation": "https://github.com/bora-yarkin/hikvision-intercom-chime",
   "integration_type": "hub",
   "iot_class": "cloud_push",
-  "issue_tracker": "https://github.com/berkkayhan34-sys/hikvision-intercom-chime/issues",
+  "issue_tracker": "https://github.com/bora-yarkin/hikvision-intercom-chime/issues",
   "loggers": [
     "custom_components.hikvision_intercom"
   ],
@@ -30,5 +30,5 @@
     "xmltodict",
     "paho-mqtt>=2.0"
   ],
-  "version": "0.5.0"
+  "version": "0.5.1"
 }
