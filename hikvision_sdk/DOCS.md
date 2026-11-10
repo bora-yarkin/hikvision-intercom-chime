@@ -1,7 +1,7 @@
 # Hikvision SDK Bridge
 
 A small local service for the **Hikvision Intercom** integration
-(<https://github.com/berkkayhan34-sys/hikvision-intercom-chime>). It logs in to a Hikvision
+(<https://github.com/bora-yarkin/hikvision-intercom-chime>). It logs in to a Hikvision
 indoor station over the station's SDK port (8000), reports whether the station is idle,
 ringing or in a call, and plays audio sent by the integration on the station's speaker.
 

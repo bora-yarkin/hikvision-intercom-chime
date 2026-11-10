@@ -13,7 +13,7 @@ Hik-Connect hesabınızla çalışır; iç ünitede özel zil sesi için ek olar
 
 ## Adımlar
 
-1. HACS -> Özel depolar -> `https://github.com/berkkayhan34-sys/hikvision-intercom-chime`
+1. HACS -> Özel depolar -> `https://github.com/bora-yarkin/hikvision-intercom-chime`
    (Entegrasyon) -> **Hikvision Intercom** indir -> Home Assistant'ı yeniden başlat.
 2. Ayarlar -> Uygulamalar -> Uygulama mağazası -> sağ üst menü -> Depolar -> aynı adresi
    ekleyin -> **Hikvision SDK Bridge** kurun (ilk derleme cihazınızda yapılır, yaklaşık 26 MB
