@@ -41,7 +41,7 @@ from .const import (
     native_stream_mode,
 )
 from .hikconnect_api import HikCamera
-from .lib.hik_decoder import HikStreamDecoder
+from .lib.hik_decoder import HikStreamDecoder, describe_stream
 from .lib.lan_client import ControlKeyError, Cpd7LanClient
 from .lib.mpegts import TsMuxer
 
@@ -293,6 +293,12 @@ class _ChannelStream:
                 if len(initial) > 2 * 1024 * 1024:
                     raise ValueError("Camera codec discovery exceeded buffer limit")
                 decoder.feed(chunk)
+            _LOGGER.info(
+                "Stream start of %s (%d bytes): %s",
+                self._cam.name,
+                len(initial),
+                describe_stream(bytes(initial)),
+            )
             if decoder.codec is None:
                 raise ValueError("Camera sent no supported video headers")
             if decoder.requires_key and self._video_key is None:
