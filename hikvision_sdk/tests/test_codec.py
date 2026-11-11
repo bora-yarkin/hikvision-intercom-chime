@@ -4,12 +4,30 @@ import struct
 
 import pytest
 from fakes import FakeSdk
-from hik_sdk_bridge.codec import G722Codec, PassThrough, downsample, g722_frame_size, upsample
+
+from hik_sdk_bridge.codec import (
+    G722Codec,
+    PassThrough,
+    downsample,
+    g722_frame_size,
+    upsample,
+)
 from hik_sdk_bridge.g711 import mulaw_to_pcm16le, pcm16le_to_mulaw
 
 
 @pytest.mark.parametrize(
-    ("length", "frame"), [(80, 80), (160, 80), (60, 60), (120, 60), (40, 40), (100, None), (0, None), (7, None), (170, None)]
+    ("length", "frame"),
+    [
+        (80, 80),
+        (160, 80),
+        (60, 60),
+        (120, 60),
+        (40, 40),
+        (100, None),
+        (0, None),
+        (7, None),
+        (170, None),
+    ],
 )
 def test_the_frame_size_is_the_largest_that_divides_the_chunk(length, frame):
     assert g722_frame_size(length) == frame
@@ -28,7 +46,10 @@ def test_upsampling_interpolates_and_doubles_the_length():
 def test_mulaw_decoding_inverts_encoding_within_the_codec_precision():
     pcm = struct.pack("<5h", 0, 1000, -1000, 20000, -20000)
     back = struct.unpack("<5h", mulaw_to_pcm16le(pcm16le_to_mulaw(pcm)))
-    assert all(abs(a - b) <= max(40, abs(a) // 16) for a, b in zip((0, 1000, -1000, 20000, -20000), back))
+    assert all(
+        abs(a - b) <= max(40, abs(a) // 16)
+        for a, b in zip((0, 1000, -1000, 20000, -20000), back, strict=True)
+    )
 
 
 def test_pass_through_changes_nothing():
@@ -40,7 +61,11 @@ def test_g722_chunks_become_whole_160_byte_mulaw_frames_and_the_bitrate_follows_
     sdk = FakeSdk()
     codec = G722Codec(sdk)
     out = codec.from_station(bytes(range(80)) * 2)  # two 32 kbit/s frames in one chunk
-    assert len(out) == 320 and len(sdk.g722_decoded) == 2 and sdk.g722_decoder_bitrates == [32000]
+    assert (
+        len(out) == 320
+        and len(sdk.g722_decoded) == 2
+        and sdk.g722_decoder_bitrates == [32000]
+    )
     codec2 = G722Codec(FakeSdk())
     codec2.from_station(bytes(60))
     assert codec2._sdk.g722_decoder_bitrates == [24000] and codec2.frame_bytes == 60

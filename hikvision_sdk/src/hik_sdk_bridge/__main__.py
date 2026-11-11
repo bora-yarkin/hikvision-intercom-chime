@@ -32,7 +32,10 @@ def main() -> int:
         log.error("Cannot start: %s", error)
         return 1
 
-    stations = {item.name: Station(item, sdk, options.audio_encoding) for item in options.stations}
+    stations = {
+        item.name: Station(item, sdk, options.audio_encoding)
+        for item in options.stations
+    }
     for station in stations.values():
         station.status()  # first login attempt; later attempts happen on demand
     server = BridgeServer(("0.0.0.0", PORT), options.token, stations)

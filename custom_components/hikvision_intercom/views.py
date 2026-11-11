@@ -52,9 +52,13 @@ class DoorListenView(HomeAssistantView):
                 async for chunk in chunks:
                     sent += len(chunk)
                     await response.write(mulaw_to_pcm16le(chunk))
-            _LOGGER.info("Door audio: a listener ended, %d bytes of door audio passed on", sent)
+            _LOGGER.info(
+                "Door audio: a listener ended, %d bytes of door audio passed on", sent
+            )
         except BridgeError as error:
-            _LOGGER.info("Door audio: a listener failed (%s) after %d bytes", error.code, sent)
+            _LOGGER.info(
+                "Door audio: a listener failed (%s) after %d bytes", error.code, sent
+            )
             if response.prepared:
                 return response  # the call ended mid-stream: the stream simply ends
             return web.json_response(
@@ -102,9 +106,17 @@ class DoorTalkView(HomeAssistantView):
         _LOGGER.info("Door audio: a talk started")
         try:
             frames = await door_call.talk(speech())
-            _LOGGER.info("Door audio: a talk ended, %d bytes of speech received, %d frames sent to the door", received, frames)
+            _LOGGER.info(
+                "Door audio: a talk ended, %d bytes of speech received, %d frames sent to the door",
+                received,
+                frames,
+            )
         except BridgeError as error:
-            _LOGGER.info("Door audio: a talk failed (%s) after %d bytes of speech", error.code, received)
+            _LOGGER.info(
+                "Door audio: a talk failed (%s) after %d bytes of speech",
+                error.code,
+                received,
+            )
             await socket.send_json({"error": error.code})
         except asyncio.CancelledError:
             raise

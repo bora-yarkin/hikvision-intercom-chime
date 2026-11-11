@@ -30,7 +30,9 @@ class StationConfig:
 class Config:
     token: str = field(repr=False)
     stations: tuple[StationConfig, ...]
-    audio_encoding: str = "auto"  # what the stations' call audio is encoded in: auto, g711 or g722_1
+    audio_encoding: str = (
+        "auto"  # what the stations' call audio is encoded in: auto, g711 or g722_1
+    )
 
 
 def _credential(value: object, field_name: str) -> str:

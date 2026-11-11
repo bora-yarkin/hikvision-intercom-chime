@@ -251,13 +251,17 @@ class Sdk:
     def start_voice(self, user_id: int, on_audio=None) -> int:
         """Open a voice channel; ``on_audio(bytes)`` receives what the device sends back (G.711), on the SDK's thread."""
         callback = None
-        stats: dict[int, list[int]] = {}  # audio flag -> [callbacks, bytes], what the SDK delivered
+        stats: dict[
+            int, list[int]
+        ] = {}  # audio flag -> [callbacks, bytes], what the SDK delivered
         if on_audio is not None:
 
             def receive(handle, buffer, size, flag, user) -> None:
                 counted = stats.setdefault(int(flag), [0, 0])
                 if counted[0] == 0:
-                    _LOGGER.info("voice callback: first data with flag %s, %s bytes", flag, size)
+                    _LOGGER.info(
+                        "voice callback: first data with flag %s, %s bytes", flag, size
+                    )
                 counted[0] += 1
                 counted[1] += int(size or 0)
                 if flag == 0 or not size or not buffer:
@@ -278,7 +282,10 @@ class Sdk:
 
     def voice_stats(self, handle: int) -> dict[int, list[int]]:
         """What the SDK has delivered to a voice channel so far: audio flag -> [callbacks, bytes]."""
-        return {flag: list(counted) for flag, counted in self._voice_stats.get(handle, {}).items()}
+        return {
+            flag: list(counted)
+            for flag, counted in self._voice_stats.get(handle, {}).items()
+        }
 
     def send_voice(self, handle: int, frame: bytes) -> None:
         buffer = create_string_buffer(frame, len(frame))
@@ -300,7 +307,10 @@ class Sdk:
 
     def g722_decode(self, handle, frame: bytes) -> bytes:
         """One G.722.1 frame to 16 kHz PCM16 (20 ms, 640 bytes expected; the buffer is larger than that to be safe)."""
-        source, target = create_string_buffer(frame, len(frame)), create_string_buffer(4096)
+        source, target = (
+            create_string_buffer(frame, len(frame)),
+            create_string_buffer(4096),
+        )
         if not self._g722("NET_DVR_DecodeG722Frame")(handle, source, target):
             raise self._fail("decode G.722.1")
         return target.raw[:640]
@@ -316,7 +326,10 @@ class Sdk:
 
     def g722_encode(self, handle, pcm16k: bytes, frame_bytes: int) -> bytes:
         """20 ms of 16 kHz PCM16 (640 bytes) to one G.722.1 frame of ``frame_bytes``."""
-        source, target = create_string_buffer(pcm16k, len(pcm16k)), create_string_buffer(4096)
+        source, target = (
+            create_string_buffer(pcm16k, len(pcm16k)),
+            create_string_buffer(4096),
+        )
         if not self._g722("NET_DVR_EncodeG722Frame")(handle, source, target):
             raise self._fail("encode G.722.1")
         return target.raw[:frame_bytes]
@@ -328,7 +341,12 @@ class Sdk:
         if function is None:
             return None, "not in this SDK"
         errors = []
-        for size in (24, 20, 32, 64):  # the struct's size is not certain; the buffer is far larger than any of them
+        for size in (
+            24,
+            20,
+            32,
+            64,
+        ):  # the struct's size is not certain; the buffer is far larger than any of them
             buffer = create_string_buffer(256)
             buffer[0:4] = size.to_bytes(4, "little")
             if function(user_id, buffer):

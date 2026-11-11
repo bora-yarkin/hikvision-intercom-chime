@@ -70,7 +70,7 @@ With a call answered, you can speak to the visitor and hear the door from Home A
 
 - **Talk from a dashboard**: the call status sensor publishes `talk_path` (a WebSocket, 16 kHz 16-bit mono PCM in binary
   messages, opened on a path signed with `auth/sign_path`) and `listen_path`, so a dashboard that reads them (the Home Control
-  dashboard's door-call popup does) can answer, talk and listen without knowing this integration. Any signed-in user may use them;
+  dashboard's door-call popup does) can answer, talk and listen without knowing this integration. While a call rings or goes on the sensor also says `can_unlock`: `false` when the caller has no lock (a building's security desk), so the dashboard leaves out the unlock. Any signed-in user may use them;
   one person talks at a time. A browser gives a page no microphone on plain `http` (other than localhost), so there the dashboard
   falls back to the phone app's Assist, below; on `https` the microphone works in the page.
 - **Talk with Assist**: the app's own **Assist** records your voice natively (so this works on `http://homeassistant.local` too, where a

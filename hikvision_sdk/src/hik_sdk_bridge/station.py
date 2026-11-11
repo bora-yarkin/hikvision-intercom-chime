@@ -42,7 +42,9 @@ class Station:
         self.name = config.name
         self._config = config
         self._sdk = sdk
-        self._audio_mode = audio  # auto, g711 or g722_1: what the station's call audio is encoded in
+        self._audio_mode = (
+            audio  # auto, g711 or g722_1: what the station's call audio is encoded in
+        )
         self._codec = PassThrough()
         self._codec_failed = False
         self._lock = threading.RLock()
@@ -60,7 +62,9 @@ class Station:
         self._door_chunks = 0
         self._door_bytes = 0
         self._door_first: float | None = None
-        self._door_sizes: list[int] = []  # the sizes of the first chunks, which say what codec the station sends
+        self._door_sizes: list[
+            int
+        ] = []  # the sizes of the first chunks, which say what codec the station sends
         self._frames_sent = 0
 
     # -- session ---------------------------------------------------------
@@ -189,7 +193,12 @@ class Station:
         if self._audio_mode == G722_1:
             return G722Codec(self._sdk)
         code, raw = self._sdk.audio_encoding(self._user_id)
-        _LOGGER.info("Station %s audio encoding as the SDK reports it: code %s (%s)", self.name, code, raw)
+        _LOGGER.info(
+            "Station %s audio encoding as the SDK reports it: code %s (%s)",
+            self.name,
+            code,
+            raw,
+        )
         return G722Codec(self._sdk) if code == 0 else PassThrough()
 
     def _open_call_audio(self) -> None:
@@ -209,7 +218,11 @@ class Station:
             self._door_first = None
             self._door_sizes = []
             self._call_audio = self._sdk.start_voice(self._user_id, self._on_door_audio)
-            _LOGGER.info("Station %s call audio opened (voice handle %s)", self.name, self._call_audio)
+            _LOGGER.info(
+                "Station %s call audio opened (voice handle %s)",
+                self.name,
+                self._call_audio,
+            )
         except SdkError as error:
             _LOGGER.warning("Station %s call audio start failed: %s", self.name, error)
             self._drop_session()
@@ -229,7 +242,11 @@ class Station:
             callbacks = self._sdk.voice_stats(handle)
             with suppress(SdkError):
                 self._sdk.stop_voice(handle)
-            first = "never" if self._door_first is None else f"{self._door_first - self._call_opened:.1f} s after opening"
+            first = (
+                "never"
+                if self._door_first is None
+                else f"{self._door_first - self._call_opened:.1f} s after opening"
+            )
             _LOGGER.info(
                 "Station %s call audio finished after %.1f s: the door sent %d chunks (%d bytes, first one %s); "
                 "first chunk sizes %s; SDK callbacks by audio flag (callbacks, bytes): %s; we sent %d frames to the door",
@@ -274,9 +291,15 @@ class Station:
             if len(data) % FRAME_BYTES:
                 # G.711 arrives in whole 160-byte frames; another size means another codec. In auto mode a chunk made of
                 # G.722.1 frames switches to it; anything else (MP2L2, G.726, AAC...) cannot be played here.
-                if self._audio_mode == AUTO and isinstance(self._codec, PassThrough) and g722_frame_size(len(data)):
+                if (
+                    self._audio_mode == AUTO
+                    and isinstance(self._codec, PassThrough)
+                    and g722_frame_size(len(data))
+                ):
                     _LOGGER.info(
-                        "Station %s: the first door chunk (%d bytes) is not G.711, so G.722.1 is assumed", self.name, len(data)
+                        "Station %s: the first door chunk (%d bytes) is not G.711, so G.722.1 is assumed",
+                        self.name,
+                        len(data),
                     )
                     self._codec = G722Codec(self._sdk)
                 elif isinstance(self._codec, PassThrough):
@@ -296,7 +319,12 @@ class Station:
         except Exception as error:  # the SDK's thread must never die of a codec problem
             if not self._codec_failed:
                 self._codec_failed = True
-                _LOGGER.warning("Station %s: the door audio could not be converted (%s: %s)", self.name, type(error).__name__, error)
+                _LOGGER.warning(
+                    "Station %s: the door audio could not be converted (%s: %s)",
+                    self.name,
+                    type(error).__name__,
+                    error,
+                )
             return
         if not audio:
             return
