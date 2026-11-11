@@ -104,3 +104,12 @@ def test_close_releases_the_codecs_it_opened():
     assert sorted(sdk.g722_released) == [("decoder", 11), ("encoder", 12)]
     codec.close()  # safe to repeat
     assert len(sdk.g722_released) == 2
+
+
+def test_mulaw_peak_is_the_loudest_sample_and_silence_is_quiet():
+    from hik_sdk_bridge.g711 import mulaw_peak, pcm16le_to_mulaw
+
+    loud = pcm16le_to_mulaw(struct.pack("<3h", 0, 12000, -3000))
+    assert 11000 < mulaw_peak(loud) < 13000
+    assert mulaw_peak(bytes([0xFF]) * 160) == 0
+    assert mulaw_peak(b"") == 0
