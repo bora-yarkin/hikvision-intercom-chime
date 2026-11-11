@@ -30,6 +30,7 @@ class StationConfig:
 class Config:
     token: str = field(repr=False)
     stations: tuple[StationConfig, ...]
+    audio_encoding: str = "auto"  # what the stations' call audio is encoded in: auto, g711 or g722_1
 
 
 def _credential(value: object, field_name: str) -> str:
@@ -72,7 +73,10 @@ def parse(raw: dict) -> Config:
     stations = tuple(parse_station(item) for item in raw.get("stations") or [])
     if len({station.name for station in stations}) != len(stations):
         raise ConfigError("duplicate station name")
-    return Config(token, stations)
+    audio = raw.get("audio_encoding", "auto")
+    if audio not in ("auto", "g711", "g722_1"):
+        raise ConfigError("audio_encoding must be auto, g711 or g722_1")
+    return Config(token, stations, audio)
 
 
 def load(path: Path = OPTIONS_PATH) -> Config:

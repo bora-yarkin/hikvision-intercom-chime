@@ -33,3 +33,18 @@ def pcm16le_to_mulaw(pcm: bytes) -> bytes:
     if len(pcm) % 2:
         raise ValueError("PCM16 data must contain whole samples")
     return bytes(_TABLE[value] for value in struct.unpack(f"<{len(pcm) // 2}H", pcm))
+
+
+def _decode_sample(code: int) -> int:
+    code = ~code & 0xFF
+    magnitude = (((code & 0x0F) << 3) + _BIAS) << ((code & 0x70) >> 4)
+    magnitude -= _BIAS
+    return -magnitude if code & 0x80 else magnitude
+
+
+_DECODE = struct.pack("<256h", *(_decode_sample(code) for code in range(256)))
+
+
+def mulaw_to_pcm16le(data: bytes) -> bytes:
+    """Convert mu-law to little-endian signed 16-bit PCM, two bytes per sample."""
+    return b"".join(_DECODE[2 * code : 2 * code + 2] for code in data)

@@ -160,6 +160,20 @@ class Sdk:
         lib.NET_DVR_StartVoiceCom_MR_V30.restype = c_int
         lib.NET_DVR_VoiceComSendData.argtypes = [c_int, c_void_p, c_uint]
         lib.NET_DVR_StopVoiceCom.argtypes = [c_int]
+        # The G.722 codec calls and the station's audio setting: signatures as best known, used only for a G.722.1 station
+        # (experimental, see codec.py). A call missing from this SDK build is simply not set up and reported when used.
+        for name, argtypes, restype in (
+            ("NET_DVR_InitG722Decoder", [c_int], c_void_p),
+            ("NET_DVR_DecodeG722Frame", [c_void_p, c_void_p, c_void_p], c_int),
+            ("NET_DVR_ReleaseG722Decoder", [c_void_p], None),
+            ("NET_DVR_InitG722Encoder", [], c_void_p),
+            ("NET_DVR_EncodeG722Frame", [c_void_p, c_void_p, c_void_p], c_int),
+            ("NET_DVR_ReleaseG722Encoder", [c_void_p], None),
+            ("NET_DVR_GetCurrentAudioCompress", [c_int, c_void_p], c_int),
+        ):
+            function = getattr(lib, name, None)
+            if function is not None:
+                function.argtypes, function.restype = argtypes, restype
 
     @classmethod
     def load(cls, library_directory: Path) -> Sdk:
@@ -270,6 +284,57 @@ class Sdk:
         buffer = create_string_buffer(frame, len(frame))
         if not self._lib.NET_DVR_VoiceComSendData(handle, buffer, len(frame)):
             raise self._fail("send voice")
+
+    # -- G.722.1 (experimental) and the station's audio setting ----------------------------------------------
+    def _g722(self, name: str):
+        function = getattr(self._lib, name, None)
+        if function is None:
+            raise SdkError(f"{name} is not in this SDK", 0)
+        return function
+
+    def g722_decoder_open(self, bitrate: int):
+        handle = self._g722("NET_DVR_InitG722Decoder")(bitrate)
+        if not handle:
+            raise self._fail("open G.722.1 decoder")
+        return handle
+
+    def g722_decode(self, handle, frame: bytes) -> bytes:
+        """One G.722.1 frame to 16 kHz PCM16 (20 ms, 640 bytes expected; the buffer is larger than that to be safe)."""
+        source, target = create_string_buffer(frame, len(frame)), create_string_buffer(4096)
+        if not self._g722("NET_DVR_DecodeG722Frame")(handle, source, target):
+            raise self._fail("decode G.722.1")
+        return target.raw[:640]
+
+    def g722_decoder_close(self, handle) -> None:
+        self._g722("NET_DVR_ReleaseG722Decoder")(handle)
+
+    def g722_encoder_open(self):
+        handle = self._g722("NET_DVR_InitG722Encoder")()
+        if not handle:
+            raise self._fail("open G.722.1 encoder")
+        return handle
+
+    def g722_encode(self, handle, pcm16k: bytes, frame_bytes: int) -> bytes:
+        """20 ms of 16 kHz PCM16 (640 bytes) to one G.722.1 frame of ``frame_bytes``."""
+        source, target = create_string_buffer(pcm16k, len(pcm16k)), create_string_buffer(4096)
+        if not self._g722("NET_DVR_EncodeG722Frame")(handle, source, target):
+            raise self._fail("encode G.722.1")
+        return target.raw[:frame_bytes]
+
+    def audio_encoding(self, user_id: int) -> tuple[int | None, str]:
+        """The station's audio encoding code (its byAudioEncType: 1 is G.711 mu-law, 2 is G.711 a-law, 0 is G.722.1 as best
+        known) and the first bytes of the answer in hex for the log; (None, reason) when the SDK cannot say."""
+        function = getattr(self._lib, "NET_DVR_GetCurrentAudioCompress", None)
+        if function is None:
+            return None, "not in this SDK"
+        errors = []
+        for size in (24, 20, 32, 64):  # the struct's size is not certain; the buffer is far larger than any of them
+            buffer = create_string_buffer(256)
+            buffer[0:4] = size.to_bytes(4, "little")
+            if function(user_id, buffer):
+                return buffer.raw[4], buffer.raw[:24].hex()
+            errors.append(self._lib.NET_DVR_GetLastError())
+        return None, f"failed with SDK errors {errors}"
 
     def stop_voice(self, handle: int) -> None:
         self._lib.NET_DVR_StopVoiceCom(handle)

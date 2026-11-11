@@ -77,3 +77,14 @@ def test_load_reads_file_and_rejects_garbage(tmp_path):
         config.load(bad)
     with pytest.raises(config.ConfigError):
         config.load(tmp_path / "missing.json")
+
+
+def test_audio_encoding_defaults_to_auto_and_accepts_the_three_choices():
+    from hik_sdk_bridge.config import ConfigError, parse
+
+    base = {"token": "t" * 40, "stations": []}
+    assert parse(base).audio_encoding == "auto"
+    for choice in ("auto", "g711", "g722_1"):
+        assert parse({**base, "audio_encoding": choice}).audio_encoding == choice
+    with pytest.raises(ConfigError):
+        parse({**base, "audio_encoding": "mp3"})

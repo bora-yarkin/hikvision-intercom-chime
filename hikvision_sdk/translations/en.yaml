@@ -5,3 +5,6 @@ configuration:
   stations:
     name: Stations
     description: Indoor stations. The Hikvision Intercom integration manages this list when you add a station there.
+  audio_encoding:
+    name: Audio encoding
+    description: What the station's call audio is encoded in (iVMS-4200, Video and Audio Settings, Audio Encoding Type). Auto asks the station; G.722.1 support is experimental.
