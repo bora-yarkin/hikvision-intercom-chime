@@ -178,7 +178,11 @@ class Handler(BaseHTTPRequestHandler):
         _LOGGER.info("Station %s: a talk started", station.name)
         try:
             frames = station.talk(self._body_chunks())
-            _LOGGER.info("Station %s: a talk ended, %d frames sent to the door", station.name, frames)
+            _LOGGER.info(
+                "Station %s: a talk ended, %d frames sent to the door",
+                station.name,
+                frames,
+            )
         except StationError as error:
             _LOGGER.info("Station %s: a talk was refused: %s", station.name, error.code)
             self._send(_STATUS[error.code], {"error": error.code})

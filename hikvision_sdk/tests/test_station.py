@@ -332,17 +332,28 @@ def test_the_end_of_a_call_logs_what_the_door_sent_and_what_was_sent_to_it(caplo
     sdk.deliver(b"a" * 160)
     sdk.deliver(b"b" * 160)
     listener.close()
-    summary = [r.getMessage() for r in caplog.records if "call audio finished" in r.getMessage()]
+    summary = [
+        r.getMessage()
+        for r in caplog.records
+        if "call audio finished" in r.getMessage()
+    ]
     assert len(summary) == 1
-    assert "the door sent 2 chunks (320 bytes" in summary[0] and "we sent 0 frames" in summary[0]
+    assert (
+        "the door sent 2 chunks (320 bytes" in summary[0]
+        and "we sent 0 frames" in summary[0]
+    )
     assert "first chunk sizes [160, 160]" in summary[0]
 
 
 def test_a_call_in_which_the_door_sent_nothing_says_so_in_the_log(caplog):
     caplog.set_level("INFO")
-    station, sdk = make(in_call(FakeSdk()))
+    station, _ = make(in_call(FakeSdk()))
     station.listen().close()
-    summary = [r.getMessage() for r in caplog.records if "call audio finished" in r.getMessage()]
+    summary = [
+        r.getMessage()
+        for r in caplog.records
+        if "call audio finished" in r.getMessage()
+    ]
     assert "the door sent 0 chunks (0 bytes, first one never" in summary[0]
 
 
@@ -354,7 +365,9 @@ def test_door_audio_that_is_not_whole_g711_frames_is_warned_about_once(caplog):
     sdk.deliver(b"x" * 170)
     sdk.deliver(b"x" * 170)
     listener.close()
-    warnings = [r.getMessage() for r in caplog.records if "not a multiple" in r.getMessage()]
+    warnings = [
+        r.getMessage() for r in caplog.records if "not a multiple" in r.getMessage()
+    ]
     assert len(warnings) == 1 and "170 bytes" in warnings[0] and "G.711" in warnings[0]
 
 
@@ -369,7 +382,9 @@ def test_whole_g711_frames_raise_no_warning(caplog):
 
 def make_audio(mode, sdk=None):
     sdk = sdk or FakeSdk()
-    return Station(StationConfig("hall", "192.168.0.50", 8000, "u", "p"), sdk, mode), sdk
+    return Station(
+        StationConfig("hall", "192.168.0.50", 8000, "u", "p"), sdk, mode
+    ), sdk
 
 
 def test_auto_uses_g722_when_the_station_says_so_and_listeners_still_get_mulaw_frames():
@@ -404,7 +419,9 @@ def test_auto_switches_to_g722_when_the_station_does_not_say_and_the_chunk_is_g7
     listener.close()
 
 
-def test_a_chunk_that_is_neither_g711_nor_g722_sized_is_warned_about_and_not_played(caplog):
+def test_a_chunk_that_is_neither_g711_nor_g722_sized_is_warned_about_and_not_played(
+    caplog,
+):
     caplog.set_level("WARNING")
     sdk = in_call(FakeSdk())
     sdk.encoding_code = None
@@ -439,7 +456,9 @@ def test_talking_to_a_g722_station_sends_encoded_frames():
     sdk = in_call(FakeSdk())
     station, _ = make_audio("g722_1", sdk)
     assert station.talk([FRAME, FRAME]) == 2
-    assert sdk.frames == [bytes([0xAB]) * 80] * 2 and all(len(p) == 640 for p in sdk.g722_encoded)
+    assert sdk.frames == [bytes([0xAB]) * 80] * 2 and all(
+        len(p) == 640 for p in sdk.g722_encoded
+    )
     assert ("encoder", 12) in sdk.g722_released
 
 
@@ -450,5 +469,8 @@ def test_a_codec_that_fails_in_the_sdk_thread_is_logged_once_and_does_not_raise(
     listener = station.listen()
     sdk.deliver(bytes(170))
     sdk.deliver(bytes(170))
-    assert len([r for r in caplog.records if "could not be converted" in r.getMessage()]) == 1
+    assert (
+        len([r for r in caplog.records if "could not be converted" in r.getMessage()])
+        == 1
+    )
     listener.close()

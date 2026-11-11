@@ -184,6 +184,16 @@ async def _async_setup_cloud(
     async_add_entities(entities)
 
 
+def unlock_hint(status: str | None, info: dict) -> dict:
+    """``can_unlock`` for a dashboard (the intercom contract): whether the caller has a door to open. While a call rings or
+    goes on, the cloud's caller info says how many locks the calling station has: a door station has one; a guard desk, and a
+    call that comes with no caller info, have none. Nothing is published when no call is going."""
+    if status not in ("ringing", "call in progress"):
+        return {}
+    locks = info.get("lockNum")
+    return {"can_unlock": isinstance(locks, int) and locks > 0}
+
+
 class HikCallStatusSensor(CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
     _attr_name = "Call status"
@@ -213,7 +223,13 @@ class HikCallStatusSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        return {**(self._entry().get("info") or {}), **self._audio_paths()}
+        entry = self._entry()
+        info = entry.get("info") or {}
+        return {
+            **info,
+            **self._audio_paths(),
+            **unlock_hint(entry.get("status"), info),
+        }
 
     def _audio_paths(self) -> dict:
         """Where a dashboard listens to and talks into this station's calls (see views.py); nothing when there is no
