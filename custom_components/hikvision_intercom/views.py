@@ -104,6 +104,7 @@ class DoorTalkView(HomeAssistantView):
                     yield message.data
 
         _LOGGER.info("Door audio: a talk started")
+        request.app[KEY_HASS].async_create_task(door_call.lan_talk_probe())
         try:
             frames = await door_call.talk(speech())
             _LOGGER.info(
