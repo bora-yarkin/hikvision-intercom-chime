@@ -335,24 +335,16 @@ class Sdk:
         return target.raw[:frame_bytes]
 
     def audio_encoding(self, user_id: int) -> tuple[int | None, str]:
-        """The station's audio encoding code (its byAudioEncType: 1 is G.711 mu-law, 2 is G.711 a-law, 0 is G.722.1 as best
-        known) and the first bytes of the answer in hex for the log; (None, reason) when the SDK cannot say."""
+        """The station's voice talk encoding code (``byAudioEncType``, the first byte of the answer: 1 is G.711 mu-law, 2 is
+        G.711 a-law, 0 is G.722.1 as best known) and the first bytes of the answer in hex for the log; (None, reason) when the
+        SDK cannot say. Read on a real DS-KH6320 whose iVMS lists G.722.1 for its video streams: the voice talk code was 1."""
         function = getattr(self._lib, "NET_DVR_GetCurrentAudioCompress", None)
         if function is None:
             return None, "not in this SDK"
-        errors = []
-        for size in (
-            24,
-            20,
-            32,
-            64,
-        ):  # the struct's size is not certain; the buffer is far larger than any of them
-            buffer = create_string_buffer(256)
-            buffer[0:4] = size.to_bytes(4, "little")
-            if function(user_id, buffer):
-                return buffer.raw[4], buffer.raw[:24].hex()
-            errors.append(self._lib.NET_DVR_GetLastError())
-        return None, f"failed with SDK errors {errors}"
+        buffer = create_string_buffer(256)  # far larger than the struct
+        if not function(user_id, buffer):
+            return None, f"failed with SDK error {self._lib.NET_DVR_GetLastError()}"
+        return buffer.raw[0], buffer.raw[:24].hex()
 
     def stop_voice(self, handle: int) -> None:
         self._lib.NET_DVR_StopVoiceCom(handle)

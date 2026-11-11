@@ -90,13 +90,13 @@ confirm both directions on a DS-KH6320.
 **The station's audio encoding.** The bridge's clients always get and give 8 kHz G.711 mu-law; what the *station* speaks is
 set in iVMS-4200 (remote configuration, *Video and Audio Settings*, **Audio Encoding Type**).
 - **G.711 (mu-law)** is the safe choice and works as described above.
-- **G.722.1** is handled too, **experimentally**: through the Hikvision SDK's own G.722 codec functions, with the frame size
-  guessed from the size of the door's audio chunks. It has not been checked against a real station; the app log shows every
-  step (the encoding the SDK reports, the chunk sizes, the codec's first frames) so a failure can be diagnosed.
+- **G.722.1** is available only by setting the app option by hand, **experimentally**: it goes through the Hikvision SDK's own
+  G.722 functions with a guessed frame size, and on a real DS-KH6320 it crashed the app (exit 139) and failed to encode.
 - Any other encoding (MP2L2, G.726, AAC) cannot be played: the log says "the first door audio chunk is N bytes, not a multiple of 160".
 
-The app option **audio_encoding** (`auto`, `g711` or `g722_1`; default `auto`) chooses what the bridge assumes. `auto` asks the
-SDK what the station uses and falls back to the size of the first door chunk; set it by hand if `auto` guesses wrong.
+The app option **audio_encoding** (`auto`, `g711` or `g722_1`; default `auto`) chooses what the bridge uses. `auto` is G.711 and
+logs what the SDK reports for the station's voice talk (code 1 is G.711 mu-law; the DS-KH6320 reports 1 even though its
+iVMS video settings say G.722.1); only `g722_1` ever selects the experimental codec.
 
 ## Moving from the old setup
 

@@ -9,7 +9,7 @@ import time
 from collections.abc import Iterable
 from contextlib import contextmanager, suppress
 
-from .codec import AUTO, G711, G722_1, G722Codec, PassThrough, g722_frame_size
+from .codec import AUTO, G722_1, G722Codec, PassThrough
 from .config import StationConfig
 from .g711 import pcm16le_to_mulaw
 from .sdk import Sdk, SdkError
@@ -185,21 +185,31 @@ class Station:
 
     # -- call audio: talk to the door and listen to it during an answered call -----------------------
     def _choose_codec(self):
-        """The codec for this call's audio: as configured, or as the station says (auto); the first door chunk may still
-        correct an auto choice (see ``_on_door_audio``)."""
+        """The codec for this call's audio. G.711 unless ``audio_encoding`` is set to g722_1 by hand: the G.722.1 path (the SDK's
+        own G.722 calls, guessed) crashed the app on a real station, so no setting ever picks it by itself; ``auto`` only reads
+        what the station says for the log."""
         self._codec_failed = False
-        if self._audio_mode == G711:
-            return PassThrough()
         if self._audio_mode == G722_1:
+            _LOGGER.warning(
+                "Station %s: G.722.1 was chosen by hand; it is experimental and has crashed this app before",
+                self.name,
+            )
             return G722Codec(self._sdk)
-        code, raw = self._sdk.audio_encoding(self._user_id)
-        _LOGGER.info(
-            "Station %s audio encoding as the SDK reports it: code %s (%s)",
-            self.name,
-            code,
-            raw,
-        )
-        return G722Codec(self._sdk) if code == 0 else PassThrough()
+        if self._audio_mode == AUTO:
+            code, raw = self._sdk.audio_encoding(self._user_id)
+            _LOGGER.info(
+                "Station %s voice talk encoding as the SDK reports it: code %s (%s)",
+                self.name,
+                code,
+                raw,
+            )
+            if code not in (None, 1):
+                _LOGGER.warning(
+                    "Station %s says its voice talk encoding is code %s, not G.711 mu-law (1): set the station's audio encoding to G.711 in iVMS-4200",
+                    self.name,
+                    code,
+                )
+        return PassThrough()
 
     def _open_call_audio(self) -> None:
         """Open the voice channel of the current call; the lock is held."""
@@ -288,28 +298,16 @@ class Station:
         """Called on the SDK's thread for every chunk of audio the door sends; listeners get 8 kHz G.711 mu-law."""
         if self._door_first is None:
             self._door_first = time.monotonic()
-            if len(data) % FRAME_BYTES:
-                # G.711 arrives in whole 160-byte frames; another size means another codec. In auto mode a chunk made of
-                # G.722.1 frames switches to it; anything else (MP2L2, G.726, AAC...) cannot be played here.
-                if (
-                    self._audio_mode == AUTO
-                    and isinstance(self._codec, PassThrough)
-                    and g722_frame_size(len(data))
-                ):
-                    _LOGGER.info(
-                        "Station %s: the first door chunk (%d bytes) is not G.711, so G.722.1 is assumed",
-                        self.name,
-                        len(data),
-                    )
-                    self._codec = G722Codec(self._sdk)
-                elif isinstance(self._codec, PassThrough):
-                    _LOGGER.warning(
-                        "Station %s: the first door audio chunk is %d bytes, not a multiple of %d: the station's audio "
-                        "encoding is probably not G.711; set Audio Encoding Type to G.711 (mu-law) in iVMS-4200",
-                        self.name,
-                        len(data),
-                        FRAME_BYTES,
-                    )
+            if len(data) % FRAME_BYTES and isinstance(self._codec, PassThrough):
+                # G.711 arrives in whole 160-byte frames; another size means another codec (G.722.1, MP2L2, G.726, AAC), which
+                # cannot be played here.
+                _LOGGER.warning(
+                    "Station %s: the first door audio chunk is %d bytes, not a multiple of %d: the station's audio "
+                    "encoding is probably not G.711; set the station's audio encoding to G.711 in iVMS-4200",
+                    self.name,
+                    len(data),
+                    FRAME_BYTES,
+                )
         self._door_chunks += 1
         self._door_bytes += len(data)
         if len(self._door_sizes) < 8:
