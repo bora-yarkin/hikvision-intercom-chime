@@ -293,12 +293,6 @@ class _ChannelStream:
                 if len(initial) > 2 * 1024 * 1024:
                     raise ValueError("Camera codec discovery exceeded buffer limit")
                 decoder.feed(chunk)
-            _LOGGER.info(
-                "Stream start of %s (%d bytes): %s",
-                self._cam.name,
-                len(initial),
-                describe_stream(bytes(initial)),
-            )
             if decoder.codec is None:
                 raise ValueError("Camera sent no supported video headers")
             if decoder.requires_key and self._video_key is None:
@@ -484,6 +478,7 @@ class _ChannelStream:
         """Station -> decoder -> every attached sink."""
         decoder = self._decoder
         empty = 0
+        sample, sample_until = bytearray(), time.monotonic() + 4
         try:
             while not self._stopping:
                 buf = await self._hass.async_add_executor_job(self._lan.read_chunk)
@@ -493,6 +488,16 @@ class _ChannelStream:
                         break
                     continue
                 empty = 0
+                if sample_until is not None:
+                    sample.extend(buf)
+                    if time.monotonic() >= sample_until or len(sample) > 1536 * 1024:
+                        _LOGGER.info(
+                            "Stream contents of %s over its first seconds (%d bytes): %s",
+                            self._cam.name,
+                            len(sample),
+                            describe_stream(bytes(sample)),
+                        )
+                        sample, sample_until = bytearray(), None
                 decoder.feed(buf)
                 for ts, unit in decoder.take_units():
                     self._ingest(ts, unit)
