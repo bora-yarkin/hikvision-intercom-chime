@@ -16,8 +16,8 @@ restarts the app after you confirm.
   published). Every request except `/v1/health` needs the bearer token.
 - The Hikvision SDK runtime files are downloaded when the image is built and verified
   against pinned SHA-256 checksums.
-- **Audio encoding** (option, default `auto`): what the station's call audio is encoded in. G.711 is the safe choice;
-  G.722.1 is supported experimentally (see the repository README).
+- **Audio encoding** (option, default `auto`): what the bridge uses for the call audio. `auto` is G.711 (and logs what the station reports);
+  G.722.1 is chosen only by hand and is experimental (see the repository README).
 - Nothing plays unless the integration sends audio, and playback is refused while the
   station is ringing or in a call.
 

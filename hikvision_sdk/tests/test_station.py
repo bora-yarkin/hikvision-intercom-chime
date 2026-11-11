@@ -387,15 +387,17 @@ def make_audio(mode, sdk=None):
     ), sdk
 
 
-def test_auto_uses_g722_when_the_station_says_so_and_listeners_still_get_mulaw_frames():
+def test_auto_never_picks_g722_even_when_the_station_reports_code_0(caplog):
+    caplog.set_level("INFO")
     sdk = in_call(FakeSdk())
     sdk.encoding_code = 0
     station, _ = make_audio("auto", sdk)
     listener = station.listen()
-    sdk.deliver(bytes(80))
-    assert len(next(iter(listener))) == 160
+    sdk.deliver(b"a" * 160)
+    assert next(iter(listener)) == b"a" * 160
     listener.close()
-    assert sdk.g722_decoder_bitrates == [32000] and ("decoder", 11) in sdk.g722_released
+    assert sdk.g722_decoder_bitrates == []
+    assert [r for r in caplog.records if "not G.711 mu-law" in r.getMessage()]
 
 
 def test_auto_stays_with_g711_when_the_station_says_g711():
@@ -409,17 +411,7 @@ def test_auto_stays_with_g711_when_the_station_says_g711():
     assert sdk.g722_decoder_bitrates == []
 
 
-def test_auto_switches_to_g722_when_the_station_does_not_say_and_the_chunk_is_g722_sized():
-    sdk = in_call(FakeSdk())
-    sdk.encoding_code = None
-    station, _ = make_audio("auto", sdk)
-    listener = station.listen()
-    sdk.deliver(bytes(60))
-    assert len(next(iter(listener))) == 160 and sdk.g722_decoder_bitrates == [24000]
-    listener.close()
-
-
-def test_a_chunk_that_is_neither_g711_nor_g722_sized_is_warned_about_and_not_played(
+def test_a_chunk_that_is_not_g711_sized_is_warned_about(
     caplog,
 ):
     caplog.set_level("WARNING")
