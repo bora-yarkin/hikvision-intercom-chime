@@ -322,3 +322,46 @@ def test_stop_call_audio_ends_our_channel_only():
     assert station.stop_call_audio() is True and sdk.voice_stopped == [99]
     assert station.stop_call_audio() is False
     listener.close()
+
+
+def test_the_end_of_a_call_logs_what_the_door_sent_and_what_was_sent_to_it(caplog):
+    # A call with no audio either way is the thing to be able to see in the log, so the summary says it in numbers.
+    caplog.set_level("INFO")
+    station, sdk = make(in_call(FakeSdk()))
+    listener = station.listen()
+    sdk.deliver(b"a" * 160)
+    sdk.deliver(b"b" * 160)
+    listener.close()
+    summary = [r.getMessage() for r in caplog.records if "call audio finished" in r.getMessage()]
+    assert len(summary) == 1
+    assert "the door sent 2 chunks (320 bytes" in summary[0] and "we sent 0 frames" in summary[0]
+    assert "first chunk sizes [160, 160]" in summary[0]
+
+
+def test_a_call_in_which_the_door_sent_nothing_says_so_in_the_log(caplog):
+    caplog.set_level("INFO")
+    station, sdk = make(in_call(FakeSdk()))
+    station.listen().close()
+    summary = [r.getMessage() for r in caplog.records if "call audio finished" in r.getMessage()]
+    assert "the door sent 0 chunks (0 bytes, first one never" in summary[0]
+
+
+def test_door_audio_that_is_not_whole_g711_frames_is_warned_about_once(caplog):
+    # A station set to G.722.1 (or another codec) sends chunks of another size: the log must say so, once per call.
+    caplog.set_level("WARNING")
+    station, sdk = make(in_call(FakeSdk()))
+    listener = station.listen()
+    sdk.deliver(b"x" * 60)
+    sdk.deliver(b"x" * 60)
+    listener.close()
+    warnings = [r.getMessage() for r in caplog.records if "not a multiple" in r.getMessage()]
+    assert len(warnings) == 1 and "60 bytes" in warnings[0] and "G.711" in warnings[0]
+
+
+def test_whole_g711_frames_raise_no_warning(caplog):
+    caplog.set_level("WARNING")
+    station, sdk = make(in_call(FakeSdk()))
+    listener = station.listen()
+    sdk.deliver(b"x" * 160)
+    listener.close()
+    assert not [r for r in caplog.records if "not a multiple" in r.getMessage()]

@@ -51,6 +51,13 @@ class Station:
         )
         self._call_users = 0
         self._listeners: set[queue.Queue] = set()
+        # what one call's audio did, for the log when it finishes
+        self._call_opened = 0.0
+        self._door_chunks = 0
+        self._door_bytes = 0
+        self._door_first: float | None = None
+        self._door_sizes: list[int] = []  # the sizes of the first chunks, which say what codec the station sends
+        self._frames_sent = 0
 
     # -- session ---------------------------------------------------------
     def _ensure_session(self) -> bool:
@@ -180,7 +187,12 @@ class Station:
         try:
             if self._sdk.call_state(self._user_id) != "in_call":
                 raise StationError("no_call")
+            self._call_opened = time.monotonic()
+            self._door_chunks = self._door_bytes = self._frames_sent = 0
+            self._door_first = None
+            self._door_sizes = []
             self._call_audio = self._sdk.start_voice(self._user_id, self._on_door_audio)
+            _LOGGER.info("Station %s call audio opened (voice handle %s)", self.name, self._call_audio)
         except SdkError as error:
             _LOGGER.warning("Station %s call audio start failed: %s", self.name, error)
             self._drop_session()
@@ -193,9 +205,23 @@ class Station:
         for listener in list(self._listeners):
             self._offer(listener, None)
         if handle is not None:
+            seconds = time.monotonic() - self._call_opened
+            callbacks = self._sdk.voice_stats(handle)
             with suppress(SdkError):
                 self._sdk.stop_voice(handle)
-            _LOGGER.info("Station %s call audio finished", self.name)
+            first = "never" if self._door_first is None else f"{self._door_first - self._call_opened:.1f} s after opening"
+            _LOGGER.info(
+                "Station %s call audio finished after %.1f s: the door sent %d chunks (%d bytes, first one %s); "
+                "first chunk sizes %s; SDK callbacks by audio flag (callbacks, bytes): %s; we sent %d frames to the door",
+                self.name,
+                seconds,
+                self._door_chunks,
+                self._door_bytes,
+                first,
+                self._door_sizes,
+                callbacks or "none",
+                self._frames_sent,
+            )
 
     @contextmanager
     def _call_session(self):
@@ -223,6 +249,22 @@ class Station:
 
     def _on_door_audio(self, data: bytes) -> None:
         """Called on the SDK's thread for every chunk of audio the door sends."""
+        if self._door_first is None:
+            self._door_first = time.monotonic()
+            if len(data) % FRAME_BYTES:
+                # G.711 arrives in whole 160-byte frames; another size means the station sends another codec (its Audio
+                # Encoding Type in iVMS-4200 may be G.722.1, MP2L2, G.726 or AAC), which this bridge cannot play.
+                _LOGGER.warning(
+                    "Station %s: the first door audio chunk is %d bytes, not a multiple of %d: the station's audio "
+                    "encoding is probably not G.711; set Audio Encoding Type to G.711 (mu-law) in iVMS-4200",
+                    self.name,
+                    len(data),
+                    FRAME_BYTES,
+                )
+        self._door_chunks += 1
+        self._door_bytes += len(data)
+        if len(self._door_sizes) < 8:
+            self._door_sizes.append(len(data))
         for listener in list(self._listeners):
             self._offer(listener, data)
 
@@ -260,6 +302,7 @@ class Station:
                         self._close_call_audio()
                     raise StationError("station_offline") from None
                 frames += 1
+                self._frames_sent += 1
 
             for chunk in chunks:
                 pending += chunk

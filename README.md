@@ -87,6 +87,11 @@ What is *not* verified: the written flow follows the Hikvision SDK and the commu
 the call is answered goes to the door; audio the SDK receives is the door's, assumed G.711 mu-law). It needs one real call to
 confirm both directions on a DS-KH6320.
 
+**The station's audio encoding must be G.711.** The bridge speaks 8 kHz G.711 mu-law to the station and expects the same back.
+A station set to another encoding (G.722.1, MP2L2, G.726, AAC) gives silence or noise in both directions. In iVMS-4200, open the
+station's remote configuration, *Video and Audio Settings*, and set **Audio Encoding Type** to G.711 (mu-law). A station sending
+something else is noticed: the app log says "the first door audio chunk is N bytes, not a multiple of 160".
+
 ## Moving from the old setup
 
 Entity IDs derive from the device name, so the chime entities are named after the Doorbell

@@ -55,7 +55,9 @@ class DoorCall:
 
     async def _in_call(self) -> None:
         state = await self._state()
+        _LOGGER.info("Door audio: the station says the call is %s", state)
         if state == "ringing":
+            _LOGGER.info("Door audio: answering the ringing call through the cloud")
             await self._answer()
             loop = asyncio.get_running_loop()
             deadline = loop.time() + ANSWER_WAIT_SECONDS

@@ -50,5 +50,8 @@ class FakeSdk:
             raise SdkError("send voice", 12)
         self.frames.append(bytes(frame))
 
+    def voice_stats(self, handle):
+        return {1: [len(self.frames), sum(len(f) for f in self.frames)]} if self.frames else {}
+
     def stop_voice(self, handle):
         self.voice_stopped.append(handle)

@@ -121,6 +121,27 @@ class Sdk:
         self._voice_callbacks: dict[
             int, object
         ] = {}  # kept alive until the voice channel stops
+        self._voice_stats: dict[int, dict[int, list[int]]] = {}
+        # Which audio codec calls this SDK build has: a station set to G.722.1 sends frames the bridge cannot play yet, and what
+        # the library offers decides how that can be added.
+        probed = (
+            "NET_DVR_InitG722Decoder",
+            "NET_DVR_DecodeG722Frame",
+            "NET_DVR_ReleaseG722Decoder",
+            "NET_DVR_InitG722Encoder",
+            "NET_DVR_EncodeG722Frame",
+            "NET_DVR_ReleaseG722Encoder",
+            "NET_DVR_InitG711Decoder",
+            "NET_DVR_InitG726Decoder",
+            "NET_DVR_GetCurrentAudioCompress",
+            "NET_DVR_GetCurrentAudioCompress_V50",
+        )
+        present = [name for name in probed if hasattr(lib, name)]
+        _LOGGER.info(
+            "SDK audio functions present: %s; absent: %s",
+            ", ".join(present) or "none",
+            ", ".join(name for name in probed if name not in present) or "none",
+        )
         lib.NET_DVR_Login_V30.argtypes = [
             c_char_p,
             c_ushort,
@@ -216,9 +237,15 @@ class Sdk:
     def start_voice(self, user_id: int, on_audio=None) -> int:
         """Open a voice channel; ``on_audio(bytes)`` receives what the device sends back (G.711), on the SDK's thread."""
         callback = None
+        stats: dict[int, list[int]] = {}  # audio flag -> [callbacks, bytes], what the SDK delivered
         if on_audio is not None:
 
             def receive(handle, buffer, size, flag, user) -> None:
+                counted = stats.setdefault(int(flag), [0, 0])
+                if counted[0] == 0:
+                    _LOGGER.info("voice callback: first data with flag %s, %s bytes", flag, size)
+                counted[0] += 1
+                counted[1] += int(size or 0)
                 if flag == 0 or not size or not buffer:
                     return
                 try:
@@ -232,7 +259,12 @@ class Sdk:
             raise self._fail("start voice")
         if callback is not None:
             self._voice_callbacks[handle] = callback
+        self._voice_stats[handle] = stats
         return handle
+
+    def voice_stats(self, handle: int) -> dict[int, list[int]]:
+        """What the SDK has delivered to a voice channel so far: audio flag -> [callbacks, bytes]."""
+        return {flag: list(counted) for flag, counted in self._voice_stats.get(handle, {}).items()}
 
     def send_voice(self, handle: int, frame: bytes) -> None:
         buffer = create_string_buffer(frame, len(frame))
@@ -242,3 +274,4 @@ class Sdk:
     def stop_voice(self, handle: int) -> None:
         self._lib.NET_DVR_StopVoiceCom(handle)
         self._voice_callbacks.pop(handle, None)
+        self._voice_stats.pop(handle, None)
