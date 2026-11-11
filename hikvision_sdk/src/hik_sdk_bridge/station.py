@@ -51,6 +51,12 @@ class Station:
         )
         self._call_users = 0
         self._listeners: set[queue.Queue] = set()
+        # what one call's audio did, for the log when it finishes
+        self._call_opened = 0.0
+        self._door_chunks = 0
+        self._door_bytes = 0
+        self._door_first: float | None = None
+        self._frames_sent = 0
 
     # -- session ---------------------------------------------------------
     def _ensure_session(self) -> bool:
@@ -180,7 +186,11 @@ class Station:
         try:
             if self._sdk.call_state(self._user_id) != "in_call":
                 raise StationError("no_call")
+            self._call_opened = time.monotonic()
+            self._door_chunks = self._door_bytes = self._frames_sent = 0
+            self._door_first = None
             self._call_audio = self._sdk.start_voice(self._user_id, self._on_door_audio)
+            _LOGGER.info("Station %s call audio opened (voice handle %s)", self.name, self._call_audio)
         except SdkError as error:
             _LOGGER.warning("Station %s call audio start failed: %s", self.name, error)
             self._drop_session()
@@ -193,9 +203,22 @@ class Station:
         for listener in list(self._listeners):
             self._offer(listener, None)
         if handle is not None:
+            seconds = time.monotonic() - self._call_opened
+            callbacks = self._sdk.voice_stats(handle)
             with suppress(SdkError):
                 self._sdk.stop_voice(handle)
-            _LOGGER.info("Station %s call audio finished", self.name)
+            first = "never" if self._door_first is None else f"{self._door_first - self._call_opened:.1f} s after opening"
+            _LOGGER.info(
+                "Station %s call audio finished after %.1f s: the door sent %d chunks (%d bytes, first one %s); "
+                "SDK callbacks by audio flag (callbacks, bytes): %s; we sent %d frames to the door",
+                self.name,
+                seconds,
+                self._door_chunks,
+                self._door_bytes,
+                first,
+                callbacks or "none",
+                self._frames_sent,
+            )
 
     @contextmanager
     def _call_session(self):
@@ -223,6 +246,10 @@ class Station:
 
     def _on_door_audio(self, data: bytes) -> None:
         """Called on the SDK's thread for every chunk of audio the door sends."""
+        if self._door_first is None:
+            self._door_first = time.monotonic()
+        self._door_chunks += 1
+        self._door_bytes += len(data)
         for listener in list(self._listeners):
             self._offer(listener, data)
 
@@ -260,6 +287,7 @@ class Station:
                         self._close_call_audio()
                     raise StationError("station_offline") from None
                 frames += 1
+                self._frames_sent += 1
 
             for chunk in chunks:
                 pending += chunk

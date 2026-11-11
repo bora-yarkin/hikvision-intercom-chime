@@ -43,13 +43,18 @@ class DoorListenView(HomeAssistantView):
         response = web.StreamResponse(
             headers={"Content-Type": "audio/wav", "Cache-Control": "no-store"}
         )
+        sent = 0
         try:
             async with door_call.listen() as chunks:
+                _LOGGER.info("Door audio: a listener started")
                 await response.prepare(request)
                 await response.write(wav_header())
                 async for chunk in chunks:
+                    sent += len(chunk)
                     await response.write(mulaw_to_pcm16le(chunk))
+            _LOGGER.info("Door audio: a listener ended, %d bytes of door audio passed on", sent)
         except BridgeError as error:
+            _LOGGER.info("Door audio: a listener failed (%s) after %d bytes", error.code, sent)
             if response.prepared:
                 return response  # the call ended mid-stream: the stream simply ends
             return web.json_response(
@@ -85,14 +90,21 @@ class DoorTalkView(HomeAssistantView):
         )
         await socket.prepare(request)
 
+        received = 0
+
         async def speech():
+            nonlocal received
             async for message in socket:
                 if message.type is WSMsgType.BINARY:
+                    received += len(message.data)
                     yield message.data
 
+        _LOGGER.info("Door audio: a talk started")
         try:
-            await door_call.talk(speech())
+            frames = await door_call.talk(speech())
+            _LOGGER.info("Door audio: a talk ended, %d bytes of speech received, %d frames sent to the door", received, frames)
         except BridgeError as error:
+            _LOGGER.info("Door audio: a talk failed (%s) after %d bytes of speech", error.code, received)
             await socket.send_json({"error": error.code})
         except asyncio.CancelledError:
             raise

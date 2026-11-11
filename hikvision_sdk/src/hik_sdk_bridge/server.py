@@ -21,6 +21,7 @@ import json
 import logging
 import re
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import __version__
@@ -120,6 +121,8 @@ class Handler(BaseHTTPRequestHandler):
         except StationError as error:
             self._send(_STATUS[error.code], {"error": error.code})
             return
+        started, sent = time.monotonic(), 0
+        _LOGGER.info("Station %s: a listener started", station.name)
         try:
             self.send_response(200)
             self.send_header("Content-Type", "application/octet-stream")
@@ -129,12 +132,19 @@ class Handler(BaseHTTPRequestHandler):
             for data in listener:
                 self.wfile.write(f"{len(data):x}\r\n".encode() + data + b"\r\n")
                 self.wfile.flush()
+                sent += len(data)
             self.wfile.write(b"0\r\n\r\n")
         except OSError:
             pass  # the listener went away
         finally:
             listener.close()
             self.close_connection = True
+            _LOGGER.info(
+                "Station %s: a listener ended after %.1f s, %d bytes of door audio passed on",
+                station.name,
+                time.monotonic() - started,
+                sent,
+            )
 
     def _body_chunks(self):
         """The request body as it arrives (chunked, or one piece with a Content-Length); ValueError when malformed."""
@@ -165,9 +175,12 @@ class Handler(BaseHTTPRequestHandler):
                 yield data
 
     def _talk(self, station: Station) -> None:
+        _LOGGER.info("Station %s: a talk started", station.name)
         try:
             frames = station.talk(self._body_chunks())
+            _LOGGER.info("Station %s: a talk ended, %d frames sent to the door", station.name, frames)
         except StationError as error:
+            _LOGGER.info("Station %s: a talk was refused: %s", station.name, error.code)
             self._send(_STATUS[error.code], {"error": error.code})
         except OverflowError:
             self._send(413, {"error": "too_large"})
