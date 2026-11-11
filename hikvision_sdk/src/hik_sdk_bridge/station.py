@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import collections
 import logging
 import queue
 import threading
@@ -11,7 +12,7 @@ from contextlib import contextmanager, suppress
 
 from .codec import AUTO, G722_1, G722Codec, PassThrough
 from .config import StationConfig
-from .g711 import pcm16le_to_mulaw
+from .g711 import mulaw_peak, pcm16le_to_mulaw
 from .sdk import Sdk, SdkError
 
 _LOGGER = logging.getLogger(__name__)
@@ -23,6 +24,7 @@ SILENCE = 0xFF  # mu-law zero
 MIN_PCM_BYTES = 2 * FRAME_BYTES
 MAX_PCM_BYTES = 1_048_576  # ~65 s at 8 kHz PCM16; the integration sends at most 60 s
 MAX_CALL_SECONDS = 600  # one call's audio session; longer than any door call
+ECHO_WINDOW_FRAMES = 400  # 8 s of sent frames kept to tell whether the door's audio is only our own voice coming back
 TALK_LEAD_SECONDS = 0.5  # how far ahead of real time a talker may send
 LISTEN_QUEUE_FRAMES = (
     100  # about two seconds of door audio per listener; older audio is dropped
@@ -60,6 +62,8 @@ class Station:
         # what one call's audio did, for the log when it finishes
         self._call_opened = 0.0
         self._door_chunks = 0
+        self._door_peak = self._sent_peak = self._door_echoes = 0
+        self._sent_recent = collections.deque(maxlen=ECHO_WINDOW_FRAMES)
         self._door_bytes = 0
         self._door_first: float | None = None
         self._door_sizes: list[
@@ -227,6 +231,8 @@ class Station:
             self._door_chunks = self._door_bytes = self._frames_sent = 0
             self._door_first = None
             self._door_sizes = []
+            self._door_peak = self._sent_peak = self._door_echoes = 0
+            self._sent_recent = collections.deque(maxlen=ECHO_WINDOW_FRAMES)
             self._call_audio = self._sdk.start_voice(self._user_id, self._on_door_audio)
             _LOGGER.info(
                 "Station %s call audio opened (voice handle %s)",
@@ -259,7 +265,8 @@ class Station:
             )
             _LOGGER.info(
                 "Station %s call audio finished after %.1f s: the door sent %d chunks (%d bytes, first one %s); "
-                "first chunk sizes %s; SDK callbacks by audio flag (callbacks, bytes): %s; we sent %d frames to the door",
+                "first chunk sizes %s; SDK callbacks by audio flag (callbacks, bytes): %s; we sent %d frames to the door; "
+                "loudest sample (of 32768) heard from the door %d, sent to the door %d; door chunks identical to a frame we sent: %d",
                 self.name,
                 seconds,
                 self._door_chunks,
@@ -268,6 +275,9 @@ class Station:
                 self._door_sizes,
                 callbacks or "none",
                 self._frames_sent,
+                self._door_peak,
+                self._sent_peak,
+                self._door_echoes,
             )
 
     @contextmanager
@@ -326,6 +336,9 @@ class Station:
             return
         if not audio:
             return
+        self._door_peak = max(self._door_peak, mulaw_peak(audio))
+        if bytes(audio) in self._sent_recent:
+            self._door_echoes += 1
         for listener in list(self._listeners):
             self._offer(listener, audio)
 
@@ -364,6 +377,8 @@ class Station:
                     raise StationError("station_offline") from None
                 frames += 1
                 self._frames_sent += 1
+                self._sent_peak = max(self._sent_peak, mulaw_peak(frame))
+                self._sent_recent.append(frame)
 
             for chunk in chunks:
                 pending += chunk

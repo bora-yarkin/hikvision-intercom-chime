@@ -48,3 +48,11 @@ _DECODE = struct.pack("<256h", *(_decode_sample(code) for code in range(256)))
 def mulaw_to_pcm16le(data: bytes) -> bytes:
     """Convert mu-law to little-endian signed 16-bit PCM, two bytes per sample."""
     return b"".join(_DECODE[2 * code : 2 * code + 2] for code in data)
+
+
+_PEAK = [abs(_decode_sample(code)) for code in range(256)]
+
+
+def mulaw_peak(data: bytes) -> int:
+    """The loudest sample of mu-law data as a 16-bit magnitude (0 for empty data), for the logs."""
+    return max((_PEAK[code] for code in data), default=0)
