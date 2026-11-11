@@ -33,7 +33,7 @@ def main() -> int:
         return 1
 
     stations = {
-        item.name: Station(item, sdk, options.audio_encoding)
+        item.name: Station(item, sdk, options.audio_encoding, options.voice_channel)
         for item in options.stations
     }
     for station in stations.values():

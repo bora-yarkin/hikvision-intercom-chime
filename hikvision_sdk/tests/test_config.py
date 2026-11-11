@@ -88,3 +88,14 @@ def test_audio_encoding_defaults_to_auto_and_accepts_the_three_choices():
         assert parse({**base, "audio_encoding": choice}).audio_encoding == choice
     with pytest.raises(ConfigError):
         parse({**base, "audio_encoding": "mp3"})
+
+
+def test_voice_channel_defaults_to_1_and_must_be_a_number_from_1_to_32():
+    from hik_sdk_bridge.config import ConfigError, parse
+
+    base = {"token": "t" * 40, "stations": []}
+    assert parse(base).voice_channel == 1
+    assert parse({**base, "voice_channel": 2}).voice_channel == 2
+    for bad in (0, 33, "2", True, 1.5):
+        with pytest.raises(ConfigError):
+            parse({**base, "voice_channel": bad})

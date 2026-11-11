@@ -14,6 +14,7 @@ class FakeSdk:
         self.logouts = []
         self.frames = []
         self.voice_started = 0
+        self.voice_channels = []
         self.voice_stopped = []
         self.on_audio = None
         self.encoding_code = 1  # what the station says its audio is encoded in (1: G.711 mu-law, 0: G.722.1, None: unknown)
@@ -36,7 +37,8 @@ class FakeSdk:
             raise SdkError("call status", self.call_error)
         return self.call
 
-    def start_voice(self, user_id, on_audio=None):
+    def start_voice(self, user_id, on_audio=None, channel=1):
+        self.voice_channels.append(channel)
         if self.voice_error:
             raise SdkError("start voice", self.voice_error)
         self.voice_started += 1
