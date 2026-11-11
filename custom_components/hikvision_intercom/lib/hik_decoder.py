@@ -173,3 +173,34 @@ class HikStreamDecoder:
             self._emit(payload, encrypted)
         if rtp[1] & 128:
             self._close_unit()
+
+
+def describe_stream(data: bytes) -> str:
+    """What a start of a CPD7 stream holds, for the log: for every interleave channel the packet count and sizes, the nested RTP
+    payload types seen, and the first bytes of a packet of each kind. Headers only; used to find out whether the stream carries
+    the door's audio."""
+    kinds: dict[tuple[int, int | None], list] = {}
+    i, total = 0, len(data)
+    while i + 4 <= total:
+        if data[i] != 0x24 or data[i + 1] > 8:
+            i += 1
+            continue
+        n = int.from_bytes(data[i + 2 : i + 4], "big")
+        if n < 13 or i + 4 + n > total:
+            break
+        packet = data[i + 4 : i + 4 + n]
+        payload_type = (
+            packet[13] & 127 if len(packet) > 13 and packet[12] == 13 else None
+        )
+        entry = kinds.setdefault((data[i + 1], payload_type), [0, 0, packet[:24].hex()])
+        entry[0] += 1
+        entry[1] += n
+        i += 4 + n
+    if not kinds:
+        return "no interleaved packets found"
+    return "; ".join(
+        f"channel {channel} nested payload type {payload_type}: {count} packets, {size} bytes, first {head}"
+        for (channel, payload_type), (count, size, head) in sorted(
+            kinds.items(), key=lambda item: (item[0][0], item[0][1] or -1)
+        )
+    )
