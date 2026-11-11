@@ -8,3 +8,6 @@ configuration:
   audio_encoding:
     name: Audio encoding
     description: What the station's call audio is encoded in (iVMS-4200, Video and Audio Settings, Audio Encoding Type). Auto uses G.711 and logs what the station reports; G.722.1 is experimental and only used when chosen here.
+  voice_channel:
+    name: Voice channel
+    description: The indoor station's voice channel the call audio is opened on. 1 is the station itself; a station that links door stations may number them after it. Change only to find the channel that reaches the door.

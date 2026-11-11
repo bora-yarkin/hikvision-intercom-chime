@@ -33,6 +33,7 @@ class Config:
     audio_encoding: str = (
         "auto"  # what the stations' call audio is encoded in: auto, g711 or g722_1
     )
+    voice_channel: int = 1  # the station's voice channel call audio is opened on
 
 
 def _credential(value: object, field_name: str) -> str:
@@ -78,7 +79,14 @@ def parse(raw: dict) -> Config:
     audio = raw.get("audio_encoding", "auto")
     if audio not in ("auto", "g711", "g722_1"):
         raise ConfigError("audio_encoding must be auto, g711 or g722_1")
-    return Config(token, stations, audio)
+    channel = raw.get("voice_channel", 1)
+    if (
+        isinstance(channel, bool)
+        or not isinstance(channel, int)
+        or not 1 <= channel <= 32
+    ):
+        raise ConfigError("voice_channel must be a number from 1 to 32")
+    return Config(token, stations, audio, channel)
 
 
 def load(path: Path = OPTIONS_PATH) -> Config:

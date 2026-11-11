@@ -40,13 +40,16 @@ class StationError(Exception):
 
 
 class Station:
-    def __init__(self, config: StationConfig, sdk: Sdk, audio: str = AUTO) -> None:
+    def __init__(
+        self, config: StationConfig, sdk: Sdk, audio: str = AUTO, voice_channel: int = 1
+    ) -> None:
         self.name = config.name
         self._config = config
         self._sdk = sdk
         self._audio_mode = (
             audio  # auto, g711 or g722_1: what the station's call audio is encoded in
         )
+        self._voice_channel = voice_channel
         self._codec = PassThrough()
         self._codec_failed = False
         self._lock = threading.RLock()
@@ -233,10 +236,13 @@ class Station:
             self._door_sizes = []
             self._door_peak = self._sent_peak = self._door_echoes = 0
             self._sent_recent = collections.deque(maxlen=ECHO_WINDOW_FRAMES)
-            self._call_audio = self._sdk.start_voice(self._user_id, self._on_door_audio)
+            self._call_audio = self._sdk.start_voice(
+                self._user_id, self._on_door_audio, self._voice_channel
+            )
             _LOGGER.info(
-                "Station %s call audio opened (voice handle %s)",
+                "Station %s call audio opened (voice channel %s, handle %s)",
                 self.name,
+                self._voice_channel,
                 self._call_audio,
             )
         except SdkError as error:

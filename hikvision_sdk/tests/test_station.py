@@ -466,3 +466,12 @@ def test_a_codec_that_fails_in_the_sdk_thread_is_logged_once_and_does_not_raise(
         == 1
     )
     listener.close()
+
+
+def test_call_audio_is_opened_on_the_configured_voice_channel():
+    sdk = in_call(FakeSdk())
+    station = Station(
+        StationConfig("hall", "192.168.0.50", 8000, "u", "p"), sdk, "auto", 3
+    )
+    station.listen().close()
+    assert sdk.voice_channels == [3]

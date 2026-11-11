@@ -248,7 +248,7 @@ class Sdk:
             return "in_call"
         return "unknown"
 
-    def start_voice(self, user_id: int, on_audio=None) -> int:
+    def start_voice(self, user_id: int, on_audio=None, channel: int = 1) -> int:
         """Open a voice channel; ``on_audio(bytes)`` receives what the device sends back (G.711), on the SDK's thread."""
         callback = None
         stats: dict[
@@ -272,7 +272,9 @@ class Sdk:
                     _LOGGER.debug("device audio handler failed", exc_info=True)
 
             callback = _VOICE_CALLBACK(receive)
-        handle = self._lib.NET_DVR_StartVoiceCom_MR_V30(user_id, 1, callback, None)
+        handle = self._lib.NET_DVR_StartVoiceCom_MR_V30(
+            user_id, channel, callback, None
+        )
         if handle < 0:
             raise self._fail("start voice")
         if callback is not None:
