@@ -122,6 +122,26 @@ class Sdk:
             int, object
         ] = {}  # kept alive until the voice channel stops
         self._voice_stats: dict[int, dict[int, list[int]]] = {}
+        # Which audio codec calls this SDK build has: a station set to G.722.1 sends frames the bridge cannot play yet, and what
+        # the library offers decides how that can be added.
+        probed = (
+            "NET_DVR_InitG722Decoder",
+            "NET_DVR_DecodeG722Frame",
+            "NET_DVR_ReleaseG722Decoder",
+            "NET_DVR_InitG722Encoder",
+            "NET_DVR_EncodeG722Frame",
+            "NET_DVR_ReleaseG722Encoder",
+            "NET_DVR_InitG711Decoder",
+            "NET_DVR_InitG726Decoder",
+            "NET_DVR_GetCurrentAudioCompress",
+            "NET_DVR_GetCurrentAudioCompress_V50",
+        )
+        present = [name for name in probed if hasattr(lib, name)]
+        _LOGGER.info(
+            "SDK audio functions present: %s; absent: %s",
+            ", ".join(present) or "none",
+            ", ".join(name for name in probed if name not in present) or "none",
+        )
         lib.NET_DVR_Login_V30.argtypes = [
             c_char_p,
             c_ushort,

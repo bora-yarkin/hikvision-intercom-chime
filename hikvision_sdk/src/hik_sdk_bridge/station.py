@@ -56,6 +56,7 @@ class Station:
         self._door_chunks = 0
         self._door_bytes = 0
         self._door_first: float | None = None
+        self._door_sizes: list[int] = []  # the sizes of the first chunks, which say what codec the station sends
         self._frames_sent = 0
 
     # -- session ---------------------------------------------------------
@@ -189,6 +190,7 @@ class Station:
             self._call_opened = time.monotonic()
             self._door_chunks = self._door_bytes = self._frames_sent = 0
             self._door_first = None
+            self._door_sizes = []
             self._call_audio = self._sdk.start_voice(self._user_id, self._on_door_audio)
             _LOGGER.info("Station %s call audio opened (voice handle %s)", self.name, self._call_audio)
         except SdkError as error:
@@ -210,12 +212,13 @@ class Station:
             first = "never" if self._door_first is None else f"{self._door_first - self._call_opened:.1f} s after opening"
             _LOGGER.info(
                 "Station %s call audio finished after %.1f s: the door sent %d chunks (%d bytes, first one %s); "
-                "SDK callbacks by audio flag (callbacks, bytes): %s; we sent %d frames to the door",
+                "first chunk sizes %s; SDK callbacks by audio flag (callbacks, bytes): %s; we sent %d frames to the door",
                 self.name,
                 seconds,
                 self._door_chunks,
                 self._door_bytes,
                 first,
+                self._door_sizes,
                 callbacks or "none",
                 self._frames_sent,
             )
@@ -248,8 +251,20 @@ class Station:
         """Called on the SDK's thread for every chunk of audio the door sends."""
         if self._door_first is None:
             self._door_first = time.monotonic()
+            if len(data) % FRAME_BYTES:
+                # G.711 arrives in whole 160-byte frames; another size means the station sends another codec (its Audio
+                # Encoding Type in iVMS-4200 may be G.722.1, MP2L2, G.726 or AAC), which this bridge cannot play.
+                _LOGGER.warning(
+                    "Station %s: the first door audio chunk is %d bytes, not a multiple of %d: the station's audio "
+                    "encoding is probably not G.711; set Audio Encoding Type to G.711 (mu-law) in iVMS-4200",
+                    self.name,
+                    len(data),
+                    FRAME_BYTES,
+                )
         self._door_chunks += 1
         self._door_bytes += len(data)
+        if len(self._door_sizes) < 8:
+            self._door_sizes.append(len(data))
         for listener in list(self._listeners):
             self._offer(listener, data)
 
