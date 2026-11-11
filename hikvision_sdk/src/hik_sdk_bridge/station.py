@@ -9,6 +9,7 @@ import time
 from collections.abc import Iterable
 from contextlib import contextmanager, suppress
 
+from .codec import AUTO, G711, G722_1, G722Codec, PassThrough, g722_frame_size
 from .config import StationConfig
 from .g711 import pcm16le_to_mulaw
 from .sdk import Sdk, SdkError
@@ -37,10 +38,13 @@ class StationError(Exception):
 
 
 class Station:
-    def __init__(self, config: StationConfig, sdk: Sdk) -> None:
+    def __init__(self, config: StationConfig, sdk: Sdk, audio: str = AUTO) -> None:
         self.name = config.name
         self._config = config
         self._sdk = sdk
+        self._audio_mode = audio  # auto, g711 or g722_1: what the station's call audio is encoded in
+        self._codec = PassThrough()
+        self._codec_failed = False
         self._lock = threading.RLock()
         self._user_id: int | None = None
         self._serial: str | None = None
@@ -176,6 +180,18 @@ class Station:
         return True
 
     # -- call audio: talk to the door and listen to it during an answered call -----------------------
+    def _choose_codec(self):
+        """The codec for this call's audio: as configured, or as the station says (auto); the first door chunk may still
+        correct an auto choice (see ``_on_door_audio``)."""
+        self._codec_failed = False
+        if self._audio_mode == G711:
+            return PassThrough()
+        if self._audio_mode == G722_1:
+            return G722Codec(self._sdk)
+        code, raw = self._sdk.audio_encoding(self._user_id)
+        _LOGGER.info("Station %s audio encoding as the SDK reports it: code %s (%s)", self.name, code, raw)
+        return G722Codec(self._sdk) if code == 0 else PassThrough()
+
     def _open_call_audio(self) -> None:
         """Open the voice channel of the current call; the lock is held."""
         if self._call_audio is not None:
@@ -187,6 +203,7 @@ class Station:
         try:
             if self._sdk.call_state(self._user_id) != "in_call":
                 raise StationError("no_call")
+            self._codec = self._choose_codec()
             self._call_opened = time.monotonic()
             self._door_chunks = self._door_bytes = self._frames_sent = 0
             self._door_first = None
@@ -202,6 +219,9 @@ class Station:
         """Stop the voice channel and release every listener; the lock is held."""
         handle, self._call_audio = self._call_audio, None
         self._call_users = 0
+        codec, self._codec = self._codec, PassThrough()
+        with suppress(Exception):
+            codec.close()
         for listener in list(self._listeners):
             self._offer(listener, None)
         if handle is not None:
@@ -248,25 +268,40 @@ class Station:
                 pass
 
     def _on_door_audio(self, data: bytes) -> None:
-        """Called on the SDK's thread for every chunk of audio the door sends."""
+        """Called on the SDK's thread for every chunk of audio the door sends; listeners get 8 kHz G.711 mu-law."""
         if self._door_first is None:
             self._door_first = time.monotonic()
             if len(data) % FRAME_BYTES:
-                # G.711 arrives in whole 160-byte frames; another size means the station sends another codec (its Audio
-                # Encoding Type in iVMS-4200 may be G.722.1, MP2L2, G.726 or AAC), which this bridge cannot play.
-                _LOGGER.warning(
-                    "Station %s: the first door audio chunk is %d bytes, not a multiple of %d: the station's audio "
-                    "encoding is probably not G.711; set Audio Encoding Type to G.711 (mu-law) in iVMS-4200",
-                    self.name,
-                    len(data),
-                    FRAME_BYTES,
-                )
+                # G.711 arrives in whole 160-byte frames; another size means another codec. In auto mode a chunk made of
+                # G.722.1 frames switches to it; anything else (MP2L2, G.726, AAC...) cannot be played here.
+                if self._audio_mode == AUTO and isinstance(self._codec, PassThrough) and g722_frame_size(len(data)):
+                    _LOGGER.info(
+                        "Station %s: the first door chunk (%d bytes) is not G.711, so G.722.1 is assumed", self.name, len(data)
+                    )
+                    self._codec = G722Codec(self._sdk)
+                elif isinstance(self._codec, PassThrough):
+                    _LOGGER.warning(
+                        "Station %s: the first door audio chunk is %d bytes, not a multiple of %d: the station's audio "
+                        "encoding is probably not G.711; set Audio Encoding Type to G.711 (mu-law) in iVMS-4200",
+                        self.name,
+                        len(data),
+                        FRAME_BYTES,
+                    )
         self._door_chunks += 1
         self._door_bytes += len(data)
         if len(self._door_sizes) < 8:
             self._door_sizes.append(len(data))
+        try:
+            audio = self._codec.from_station(data)
+        except Exception as error:  # the SDK's thread must never die of a codec problem
+            if not self._codec_failed:
+                self._codec_failed = True
+                _LOGGER.warning("Station %s: the door audio could not be converted (%s: %s)", self.name, type(error).__name__, error)
+            return
+        if not audio:
+            return
         for listener in list(self._listeners):
-            self._offer(listener, data)
+            self._offer(listener, audio)
 
     def talk(self, chunks: Iterable[bytes]) -> int:
         """Send 8 kHz mu-law audio into the answered call; returns the frames sent.
@@ -293,8 +328,8 @@ class Station:
                         "no_call"
                     )  # the call ended while we were talking
                 try:
-                    self._sdk.send_voice(handle, frame)
-                except SdkError as error:
+                    self._sdk.send_voice(handle, self._codec.to_station(frame))
+                except (SdkError, ValueError) as error:
                     _LOGGER.warning(
                         "Station %s call audio interrupted: %s", self.name, error
                     )
