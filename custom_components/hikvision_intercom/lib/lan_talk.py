@@ -53,12 +53,14 @@ def _tone_frames(seconds: float) -> list[bytes]:
     return [data[i : i + 160] for i in range(0, len(data) - 159, 160)]
 
 
-def _xml_talk_start(serial: str, channel: int, encoding: int) -> bytes:
+def _xml_talk_start(
+    serial: str, channel: int, encoding: int, related: bool = True
+) -> bytes:
     return (
         '<?xml version="1.0" encoding="utf-8"?>\n'
         "<Request>\n"
         f"\t<OperationCode>{PLACEHOLDER_OP_CODE}</OperationCode>\n"
-        f'\t<AudioInfo Channel="{channel}" Encoding="{encoding}" RelatedDevice="{serial}" />\n'
+        f'\t<AudioInfo Channel="{channel}" Encoding="{encoding}"{f" RelatedDevice={chr(34)}{serial}{chr(34)}" if related else ""} />\n'
         f"\t<Uuid>{uuid.uuid4()}</Uuid>\n"
         f"\t<Timestamp>{int(time.time() * 1000)}</Timestamp>\n"
         "</Request>\n"
@@ -74,41 +76,55 @@ def _voice_packet(session: int, payload: bytes) -> bytes:
     )
 
 
-def probe_talk(
-    host: str,
-    serial: str,
-    key: bytes,
-    channel: int = 1,
-    encoding: int = 1,
-    seconds: float = 8.0,
-) -> None:
-    """Open a talk session, send a tone for a few seconds and log everything the station says. Never raises."""
+def _start(host: str, key: bytes, xml: bytes):
+    """INIT, then TalkStart on a fresh control connection; returns (socket, answer text)."""
+    init = socket.create_connection((host, PORT_CTRL), timeout=5)
+    try:
+        init.sendall(_build_packet(1, CMD_INIT, _xml_init(INIT_SESSION_ID), key))
+        _recv_response(init)
+    finally:
+        init.close()
+    sock = socket.create_connection((host, PORT_CTRL), timeout=5)
+    try:
+        sock.sendall(_build_packet(1, CMD_TALK_START, xml, key))
+        _, body = _parse_response(_recv_response(sock, timeout=8), key)
+    except Exception:
+        sock.close()
+        raise
+    return sock, body.decode("utf-8", "replace")
+
+
+def probe_talk(host: str, serial: str, key: bytes, seconds: float = 8.0) -> None:
+    """Try TalkStart request variants until the station accepts one, then send a tone and log what comes back. Never raises."""
     sock = None
     try:
-        init = socket.create_connection((host, PORT_CTRL), timeout=5)
-        try:
-            init.sendall(_build_packet(1, CMD_INIT, _xml_init(INIT_SESSION_ID), key))
-            _recv_response(init)
-        finally:
-            init.close()
-        sock = socket.create_connection((host, PORT_CTRL), timeout=5)
-        sock.sendall(
-            _build_packet(
-                1, CMD_TALK_START, _xml_talk_start(serial, channel, encoding), key
+        variants = [
+            (channel, encoding, related)
+            for related in (True, False)
+            for channel in (1, 0, 2)
+            for encoding in (1, 0, 2, 3, 4, 5, 6)
+        ]
+        session = None
+        for channel, encoding, related in variants:
+            sock, text = _start(
+                host, key, _xml_talk_start(serial, channel, encoding, related)
             )
-        )
-        meta, body = _parse_response(_recv_response(sock, timeout=8), key)
-        text = body.decode("utf-8", "replace")
-        _LOGGER.info(
-            "Talk probe: answer cmd=0x%04x to TalkStart(encoding=%d): %s",
-            meta["cmd"],
-            encoding,
-            re.sub(r"\s+", " ", text)[:400],
-        )
-        found = re.search(r"<Session>(\d+)</Session>", text)
-        if not found:
+            answer = re.sub(r"\s+", " ", text)
+            found = re.search(r"<Session>(\d+)</Session>", text)
+            _LOGGER.info(
+                "Talk probe: channel=%d encoding=%d related=%s -> %s",
+                channel,
+                encoding,
+                related,
+                answer[:300],
+            )
+            if found:
+                session = int(found.group(1))
+                break
+            sock.close()
+            sock = None
+        if session is None:
             return
-        session = int(found.group(1))
         stop = threading.Event()
 
         def speak() -> None:

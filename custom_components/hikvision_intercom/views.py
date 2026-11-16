@@ -26,6 +26,9 @@ TALK_MESSAGE_LIMIT = (
 TALK_HEARTBEAT = 20
 
 
+EXPERIMENT_LAN_TALK = True  # temporary: only the app's local talk session is tried, to see what the panel accepts
+
+
 class DoorListenView(HomeAssistantView):
     url = LISTEN_PATH
     name = "api:hikvision_intercom:listen"
@@ -40,6 +43,10 @@ class DoorListenView(HomeAssistantView):
         door_call = (data or {}).get("door_calls", {}).get(subentry_id)
         if door_call is None:
             return web.json_response({"error": "not_found"}, status=404)
+        if (
+            EXPERIMENT_LAN_TALK
+        ):  # the bridge's SDK voice channel would hold the panel's audio
+            return web.json_response({"error": "no_call"}, status=409)
         response = web.StreamResponse(
             headers={"Content-Type": "audio/wav", "Cache-Control": "no-store"}
         )
@@ -104,7 +111,10 @@ class DoorTalkView(HomeAssistantView):
                     yield message.data
 
         _LOGGER.info("Door audio: a talk started")
-        request.app[KEY_HASS].async_create_task(door_call.lan_talk_probe())
+        if EXPERIMENT_LAN_TALK:
+            await door_call.lan_talk_probe()
+            await socket.close()
+            return socket
         try:
             frames = await door_call.talk(speech())
             _LOGGER.info(
