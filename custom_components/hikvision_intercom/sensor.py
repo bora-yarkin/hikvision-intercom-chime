@@ -236,6 +236,8 @@ class HikCallStatusSensor(CoordinatorEntity, SensorEntity):
         local station to carry the audio."""
         data = self.hass.data.get(DOMAIN, {}) if self.hass else {}
         for entry_id, entry_data in data.items():
+            if not isinstance(entry_data, dict):
+                continue  # the app lock (bridge_app.py) is kept beside the entries
             for subentry_id, door_call in entry_data.get("door_calls", {}).items():
                 if door_call.serial == self._serial:
                     ids = {"entry_id": entry_id, "subentry_id": subentry_id}

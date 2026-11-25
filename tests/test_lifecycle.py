@@ -7,6 +7,7 @@ from homeassistant.config_entries import ConfigEntryState, ConfigSubentry
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
+from custom_components.hikvision_intercom.bridge_app import _lock
 from custom_components.hikvision_intercom.const import DOMAIN
 from custom_components.hikvision_intercom.diagnostics import (
     async_get_config_entry_diagnostics,
@@ -224,3 +225,19 @@ async def test_two_stations_keep_separate_devices(
     await setup(hass, entry)
     devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
     assert len(devices) == 3  # the doorbell and one device per station
+
+
+async def test_the_call_status_sensor_survives_the_app_lock_left_by_adding_a_station(
+    hass, cloud, supervisor, entry, aioclient_mock
+):
+    # Adding or removing a station leaves a lock next to the entries in hass.data;
+    # the sensor looks through them for its station's audio paths.
+    _lock(hass)
+    mock_bridge(aioclient_mock)
+    await setup(hass, entry)
+
+    state = hass.states.get("sensor.ds_kh6320_wte1_call_status")
+    assert state is not None
+    subentry_id = next(iter(entry.subentries))
+    assert entry.entry_id in state.attributes["listen_path"]
+    assert subentry_id in state.attributes["listen_path"]
